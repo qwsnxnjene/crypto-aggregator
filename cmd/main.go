@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto-aggregator/internal/aggregator"
 	"crypto-aggregator/internal/handler"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +13,7 @@ import (
 func main() {
 	agg := aggregator.NewAggregator()
 	handle := handler.NewHandler(&agg)
+	srv := &http.Server{Addr: ":8080"}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -25,13 +25,11 @@ func main() {
 	go func() {
 		<-sigChan
 		cancel()
+		srv.Shutdown(context.Background())
 	}()
 
 	http.Handle("/prices", corsMiddleware(http.HandlerFunc(handle.Prices)))
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Printf("[main]: %v", err)
-	}
+	srv.ListenAndServe()
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
