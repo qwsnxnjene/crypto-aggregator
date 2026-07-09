@@ -17,6 +17,10 @@ type PriceResponse struct {
 
 type BinanceFetcher struct{}
 
+func NewBinanceFetcher() BinanceFetcher {
+	return BinanceFetcher{}
+}
+
 func (b BinanceFetcher) FetchPrice(ctx context.Context, symbol string) (float64, error) {
 	client := &http.Client{}
 

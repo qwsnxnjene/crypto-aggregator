@@ -29,6 +29,7 @@ func main() {
 	}()
 
 	http.Handle("/prices", corsMiddleware(http.HandlerFunc(handle.Prices)))
+	http.Handle("/ws", corsMiddleware(http.HandlerFunc(handle.PricesWS)))
 	srv.ListenAndServe()
 }
 

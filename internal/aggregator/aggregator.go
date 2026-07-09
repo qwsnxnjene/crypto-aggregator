@@ -18,6 +18,8 @@ type Aggregator struct {
 	mu       sync.RWMutex
 	fetchers []fetcher.PriceFetcher
 	data     map[string]*SymbolData
+	notify   chan struct{}
+	notifyMu sync.RWMutex
 }
 
 func NewAggregator() Aggregator {
@@ -28,6 +30,8 @@ func NewAggregator() Aggregator {
 			"BTCUSDT": {Sources: map[string]float64{}},
 			"ETHUSDT": {Sources: map[string]float64{}},
 		},
+		make(chan struct{}),
+		sync.RWMutex{},
 	}
 }
 
@@ -79,6 +83,10 @@ func (a *Aggregator) Run(ctx context.Context) {
 			// fmt.Printf("%s from %s at %v: %v\n", data.Symbol, data.Source, data.UpdatedAt, data.Price)
 			a.mu.Unlock()
 		}
+		a.notifyMu.Lock()
+		close(a.notify)
+		a.notify = make(chan struct{})
+		a.notifyMu.Unlock()
 		time.Sleep(time.Second * 5)
 	}
 }
@@ -93,4 +101,10 @@ func (a *Aggregator) GetData() map[string]SymbolData {
 	}
 
 	return res
+}
+
+func (a *Aggregator) Subscribe() chan struct{} {
+	a.notifyMu.RLock()
+	defer a.notifyMu.RUnlock()
+	return a.notify
 }

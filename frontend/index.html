@@ -45,6 +45,7 @@
       animation: pulse 2s infinite;
     }
 
+    .dot.connecting { background: #f59e0b; }
     .dot.error { background: #ef4444; animation: none; }
 
     @keyframes pulse {
@@ -153,7 +154,7 @@
   <header>
     <h1>Crypto aggregator</h1>
     <div class="status">
-      <div class="dot" id="dot"></div>
+      <div class="dot connecting" id="dot"></div>
       <span id="status-text">connecting...</span>
     </div>
   </header>
@@ -168,16 +169,16 @@
   </div>
 
   <script>
-    const API_URL = 'http://localhost:8080/prices';
-    const POLL_INTERVAL = 3000;
+    const WS_URL = 'ws://localhost:8080/ws';
+    const RECONNECT_DELAY = 3000;
 
     const grid = document.getElementById('grid');
     const dot = document.getElementById('dot');
     const statusText = document.getElementById('status-text');
     const errorBanner = document.getElementById('error-banner');
 
-    function setStatus(ok, text) {
-      dot.className = ok ? 'dot' : 'dot error';
+    function setStatus(state, text) {
+      dot.className = 'dot ' + state;
       statusText.textContent = text;
     }
 
@@ -196,8 +197,8 @@
       return '$' + price.toFixed(6);
     }
 
-    function timeAgo(ts) {
-      const diff = Math.floor((Date.now() - ts) / 1000);
+    function timeAgo(ms) {
+      const diff = Math.floor((Date.now() - ms) / 1000);
       if (diff < 5) return 'just now';
       if (diff < 60) return diff + 's ago';
       return Math.floor(diff / 60) + 'm ago';
@@ -228,26 +229,36 @@
       }).join('');
     }
 
-    async function poll() {
-      try {
-        const res = await fetch(API_URL);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+    function connect() {
+      setStatus('connecting', 'connecting...');
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
         hideError();
-        setStatus(true, 'live · updates every 3s');
-        render(data);
-      } catch (err) {
-        setStatus(false, 'disconnected');
-        showError(`Cannot reach ${API_URL} — is the backend running? (${err.message})`);
-      }
+        setStatus('', 'live · websocket');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          render(data);
+        } catch (e) {
+          console.error('parse error', e);
+        }
+      };
+
+      ws.onclose = () => {
+        setStatus('error', 'disconnected · reconnecting...');
+        showError(`Lost connection to ${WS_URL} — reconnecting in ${RECONNECT_DELAY / 1000}s`);
+        setTimeout(connect, RECONNECT_DELAY);
+      };
+
+      ws.onerror = () => {
+        setStatus('error', 'error');
+      };
     }
 
-    poll();
-    setInterval(poll, POLL_INTERVAL);
-    setInterval(() => { if (grid.querySelector('.card')) render(window._lastData || {}); }, 10000);
-
-    const _origRender = render;
-    window.render = (data) => { window._lastData = data; _origRender(data); };
+    connect();
   </script>
 </body>
 </html>
