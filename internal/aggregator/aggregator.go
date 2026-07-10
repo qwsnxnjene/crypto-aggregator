@@ -3,6 +3,7 @@ package aggregator
 import (
 	"context"
 	"crypto-aggregator/internal/fetcher"
+	"crypto-aggregator/internal/storage"
 	"log"
 	"sync"
 	"time"
@@ -20,9 +21,10 @@ type Aggregator struct {
 	data     map[string]*SymbolData
 	notify   chan struct{}
 	notifyMu sync.RWMutex
+	storage  *storage.Storage
 }
 
-func NewAggregator() Aggregator {
+func NewAggregator(storage *storage.Storage) Aggregator {
 	return Aggregator{
 		sync.RWMutex{},
 		[]fetcher.PriceFetcher{fetcher.BinanceFetcher{}, fetcher.NewCoinGeckoFetcher()},
@@ -32,6 +34,7 @@ func NewAggregator() Aggregator {
 		},
 		make(chan struct{}),
 		sync.RWMutex{},
+		storage,
 	}
 }
 
@@ -82,6 +85,12 @@ func (a *Aggregator) Run(ctx context.Context) {
 			a.data[data.Symbol].Average = avg
 			// fmt.Printf("%s from %s at %v: %v\n", data.Symbol, data.Source, data.UpdatedAt, data.Price)
 			a.mu.Unlock()
+		}
+		for symbol, info := range a.data {
+			err := a.storage.Save(ctx, symbol, info.Average, info.Sources)
+			if err != nil {
+				log.Printf("[aggregator.Run]: can't save to DB: %v", err)
+			}
 		}
 		a.notifyMu.Lock()
 		close(a.notify)

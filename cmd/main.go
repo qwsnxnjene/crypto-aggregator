@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto-aggregator/internal/aggregator"
 	"crypto-aggregator/internal/handler"
+	"crypto-aggregator/internal/storage"
+	"github.com/joho/godotenv"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,7 +14,15 @@ import (
 )
 
 func main() {
-	agg := aggregator.NewAggregator()
+	godotenv.Load()
+	dsn := os.Getenv("DB_DSN")
+	dbConn := dsn
+	conn, err := storage.NewStorage(dbConn)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	agg := aggregator.NewAggregator(conn)
 	handle := handler.NewHandler(&agg)
 	srv := &http.Server{Addr: ":8080"}
 	ctx, cancel := context.WithCancel(context.Background())
